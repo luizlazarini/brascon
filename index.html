@@ -46,15 +46,26 @@
             boxShadow: {
               'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
               'hover': '0 10px 25px rgba(0, 146, 208, 0.15)',
+              'glow': '0 0 20px rgba(0, 146, 208, 0.3)',
             },
             animation: {
               'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
+              'fade-in': 'fadeIn 0.6s ease-out forwards',
               'bounce-slow': 'bounce 3s infinite',
+              'float': 'float 6s ease-in-out infinite',
             },
             keyframes: {
               fadeInUp: {
-                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '0%': { opacity: '0', transform: 'translateY(30px)' },
                 '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
               }
             }
           }
@@ -64,14 +75,98 @@
     
     <style>
       html { scroll-behavior: smooth; }
-      body { background-color: #F7F7F7; }
+      body { background-color: #F7F7F7; overflow-x: hidden; }
+      
+      /* Fade in on scroll */
+      .fade-section {
+        opacity: 0;
+        transform: translateY(40px);
+        transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+      }
+      .fade-section.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      
+      /* Stagger children animation */
+      .stagger-children > * {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      .stagger-children.visible > *:nth-child(1) { animation: fadeInUp 0.6s ease-out 0.1s forwards; }
+      .stagger-children.visible > *:nth-child(2) { animation: fadeInUp 0.6s ease-out 0.2s forwards; }
+      .stagger-children.visible > *:nth-child(3) { animation: fadeInUp 0.6s ease-out 0.3s forwards; }
+      .stagger-children.visible > *:nth-child(4) { animation: fadeInUp 0.6s ease-out 0.4s forwards; }
+      .stagger-children.visible > *:nth-child(5) { animation: fadeInUp 0.6s ease-out 0.5s forwards; }
+      
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      
+      /* Parallax */
+      .parallax-bg {
+        transition: transform 0.1s ease-out;
+      }
+      
+      /* Seal protection */
+      .seal-protected {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        pointer-events: none;
+      }
+      .seal-container {
+        position: relative;
+      }
+      .seal-container::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: transparent;
+        pointer-events: auto;
+      }
+      
+      /* Seal hover effect */
+      .seal-wrapper {
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      .seal-wrapper:hover {
+        transform: translateY(-8px) scale(1.05);
+        filter: drop-shadow(0 15px 25px rgba(0, 70, 148, 0.2));
+      }
+      
+      /* Counter animation */
+      .count-up {
+        display: inline-block;
+      }
+      
+      /* Smooth section transitions */
+      .section-gradient-top {
+        background: linear-gradient(to bottom, transparent 0%, currentColor 100%);
+      }
+      
+      /* Back to top button */
+      .back-to-top {
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+      }
+      .back-to-top.visible {
+        opacity: 1;
+        visibility: visible;
+      }
     </style>
   </head>
   <body class="text-brascon-dark antialiased">
     <div id="root"></div>
 
     <script type="text/babel">
-      const { useState, useEffect } = React;
+      const { useState, useEffect, useRef } = React;
 
       // ========== LUCIDE ICONS ==========
       const createIcon = (name) => {
@@ -98,6 +193,7 @@
       const MessageCircle = createIcon('MessageCircle');
       const Award = createIcon('Award');
       const ArrowRight = createIcon('ArrowRight');
+      const ArrowUp = createIcon('ArrowUp');
       const Check = createIcon('Check');
       const ChevronRight = createIcon('ChevronRight');
       const MapPin = createIcon('MapPin');
@@ -105,10 +201,8 @@
       const Mail = createIcon('Mail');
       const Clock = createIcon('Clock');
       const Send = createIcon('Send');
-      const Search = createIcon('Search');
       const Star = createIcon('Star');
       const Navigation = createIcon('Navigation');
-      const Share2 = createIcon('Share2');
       const Smartphone = createIcon('Smartphone');
       const Plus = createIcon('Plus');
       const Wrench = createIcon('Wrench');
@@ -118,6 +212,77 @@
       const ShieldCheck = createIcon('ShieldCheck');
       const HardHat = createIcon('HardHat');
       const BadgeCheck = createIcon('BadgeCheck');
+
+      // ========== HOOKS ==========
+      
+      // Intersection Observer for fade-in animations
+      const useFadeIn = () => {
+        const ref = useRef(null);
+        
+        useEffect(() => {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add('visible');
+                }
+              });
+            },
+            { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+          );
+          
+          if (ref.current) {
+            observer.observe(ref.current);
+          }
+          
+          return () => observer.disconnect();
+        }, []);
+        
+        return ref;
+      };
+      
+      // Counter animation hook
+      const useCountUp = (end, duration = 2000) => {
+        const [count, setCount] = useState(0);
+        const [started, setStarted] = useState(false);
+        const ref = useRef(null);
+        
+        useEffect(() => {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              if (entries[0].isIntersecting && !started) {
+                setStarted(true);
+              }
+            },
+            { threshold: 0.5 }
+          );
+          
+          if (ref.current) {
+            observer.observe(ref.current);
+          }
+          
+          return () => observer.disconnect();
+        }, [started]);
+        
+        useEffect(() => {
+          if (!started) return;
+          
+          let startTime;
+          const animate = (timestamp) => {
+            if (!startTime) startTime = timestamp;
+            const progress = Math.min((timestamp - startTime) / duration, 1);
+            setCount(Math.floor(progress * end));
+            
+            if (progress < 1) {
+              requestAnimationFrame(animate);
+            }
+          };
+          
+          requestAnimationFrame(animate);
+        }, [started, end, duration]);
+        
+        return [count, ref];
+      };
 
       // ========== CONSTANTS ==========
       const COMPANY_INFO = {
@@ -132,19 +297,6 @@
         whatsappLink: "https://wa.me/5511994312785?text=Ol%C3%A1%2C%20vim%20pelo%20site%20e%20gostaria%20de%20um%20or%C3%A7amento.",
         yearsInMarket: new Date().getFullYear() - 2004
       };
-
-      const SEO_KEYWORDS = [
-        { keyword: "Instalação Split Residencial Zona Norte", volume: "Médio", intent: "Residencial" },
-        { keyword: "Manutenção PMOC Comercial SP", volume: "Alto", intent: "Comercial" },
-        { keyword: "VRF Daikin Fujitsu Industrial", volume: "Alto", intent: "Industrial" },
-        { keyword: "Autorizada Midea Carrier Springer Zona Norte", volume: "Alto", intent: "Local" },
-        { keyword: "Conserto Ar Condicionado Midea Daikin Fujitsu", volume: "Médio", intent: "Serviço" },
-        { keyword: "Limpeza de dutos ANVISA", volume: "Baixo", intent: "Compliance" },
-        { keyword: "Manutenção de Chiller Industrial", volume: "Médio", intent: "Industrial" },
-        { keyword: "Infraestrutura de Ar Condicionado", volume: "Alto", intent: "Obras" },
-        { keyword: "Empresa de climatização São Paulo", volume: "Baixo", intent: "Hiper-local" },
-        { keyword: "Adequação PMOC Lei 13.589", volume: "Médio", intent: "Legal" }
-      ];
 
       const SERVICES = [
         {
@@ -194,7 +346,8 @@
         {
           title: "+20 Anos de Mercado",
           description: "Desde 2004 oferecendo solidez e confiança para famílias e empresas de SP.",
-          icon: ShieldCheck
+          icon: ShieldCheck,
+          hasCounter: true
         },
         {
           title: "Localização Estratégica",
@@ -208,15 +361,43 @@
         }
       ];
 
-      const brands = [
-        { name: 'Midea', color: '#0092D0' },
-        { name: 'Carrier', color: '#004694' },
-        { name: 'Daikin', color: '#1E90FF' },
-        { name: 'Fujitsu', color: '#D50000' },
-        { name: 'Springer', color: '#0055A4' },
-        { name: 'Rheem', color: '#C41230' },
-        { name: 'York', color: '#FF6600' },
+      const BRAND_SEALS = [
+        { name: 'Midea', image: './selo-midea.png' },
+        { name: 'Carrier', image: './selo-carrier.png' },
+        { name: 'Daikin', image: './selo-daikin.png' },
+        { name: 'Fujitsu', image: './selo-fujitsu.png' },
+        { name: 'Springer', image: './selo-springer.png' },
+        { name: 'Rheem', image: './selo-rheem.png' },
+        { name: 'York', image: './selo-york.png' },
       ];
+
+      // ========== BACK TO TOP BUTTON ==========
+      function BackToTop() {
+        const [visible, setVisible] = useState(false);
+        
+        useEffect(() => {
+          const toggleVisibility = () => {
+            setVisible(window.scrollY > 500);
+          };
+          
+          window.addEventListener('scroll', toggleVisibility);
+          return () => window.removeEventListener('scroll', toggleVisibility);
+        }, []);
+        
+        const scrollToTop = () => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+        
+        return (
+          <button
+            onClick={scrollToTop}
+            className={`back-to-top fixed bottom-8 right-8 z-50 w-12 h-12 bg-brascon-navy text-white rounded-full shadow-lg flex items-center justify-center hover:bg-brascon-cyan transition-all duration-300 ${visible ? 'visible' : ''}`}
+            aria-label="Voltar ao topo"
+          >
+            <ArrowUp className="w-5 h-5" />
+          </button>
+        );
+      }
 
       // ========== HEADER COMPONENT ==========
       function Header() {
@@ -255,9 +436,9 @@
               </div>
             </div>
 
-            <header className={`sticky top-0 w-full z-50 bg-white transition-all duration-300 ${isScrolled ? 'shadow-md py-2' : 'border-b border-brascon-border py-4'}`}>
+            <header className={`sticky top-0 w-full z-50 bg-white transition-all duration-500 ${isScrolled ? 'shadow-lg py-1' : 'border-b border-brascon-border py-3'}`}>
               <div className="max-w-[1400px] mx-auto px-6">
-                <div className="flex justify-between items-center h-16">
+                <div className={`flex justify-between items-center transition-all duration-500 ${isScrolled ? 'h-14' : 'h-16'}`}>
                   
                   <div className="flex items-center gap-6">
                     <a href="#home" className="flex items-center gap-3">
@@ -265,7 +446,7 @@
                         <img 
                           src="./logo.png" 
                           alt="Brascon Refrigeração" 
-                          className="h-16 w-auto object-contain"
+                          className={`w-auto object-contain transition-all duration-500 ${isScrolled ? 'h-12' : 'h-16'}`}
                           onError={() => setLogoError(true)}
                         />
                       ) : (
@@ -273,9 +454,9 @@
                       )}
                     </a>
 
-                    <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
+                    <div className={`h-10 w-px bg-gray-200 hidden sm:block transition-all duration-500 ${isScrolled ? 'opacity-0' : 'opacity-100'}`}></div>
 
-                    <div className="flex items-center gap-3">
+                    <div className={`flex items-center gap-3 transition-all duration-500 ${isScrolled ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
                       <div className="w-10 h-10 rounded-full bg-brascon-gray flex items-center justify-center text-brascon-navy">
                         <Award className="w-5 h-5" />
                       </div>
@@ -296,11 +477,11 @@
                   </nav>
 
                   <div className="hidden lg:flex items-center gap-4">
-                    <div className="flex flex-col items-end mr-2">
+                    <div className={`flex flex-col items-end mr-2 transition-all duration-500 ${isScrolled ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
                       <span className="text-[10px] text-gray-400 font-bold uppercase">Plantão WhatsApp</span>
                       <span className="text-sm font-bold text-brascon-navy">{COMPANY_INFO.phone}</span>
                     </div>
-                    <a href={COMPANY_INFO.whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2 border-2 border-green-500 bg-green-500 text-white text-sm font-bold rounded-full hover:bg-green-600 hover:border-green-600 transition-all duration-300 shadow-md">
+                    <a href={COMPANY_INFO.whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2 border-2 border-green-500 bg-green-500 text-white text-sm font-bold rounded-full hover:bg-green-600 hover:border-green-600 transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5">
                       <MessageCircle className="w-4 h-4" />
                       WhatsApp
                     </a>
@@ -315,10 +496,16 @@
               </div>
 
               {isOpen && (
-                <div className="lg:hidden bg-white border-t border-gray-100 absolute w-full shadow-xl">
+                <div className="lg:hidden bg-white border-t border-gray-100 absolute w-full shadow-xl animate-fade-in">
                   <div className="px-4 py-4 space-y-1">
-                    {navItems.map((item) => (
-                      <a key={item.label} href={item.href} onClick={() => setIsOpen(false)} className="block px-4 py-4 border-b border-gray-50 text-base font-semibold text-gray-700 hover:text-brascon-cyan hover:bg-brascon-gray/50 transition-colors">
+                    {navItems.map((item, index) => (
+                      <a 
+                        key={item.label} 
+                        href={item.href} 
+                        onClick={() => setIsOpen(false)} 
+                        className="block px-4 py-4 border-b border-gray-50 text-base font-semibold text-gray-700 hover:text-brascon-cyan hover:bg-brascon-gray/50 transition-colors"
+                        style={{ animationDelay: `${index * 0.05}s` }}
+                      >
                         {item.label}
                       </a>
                     ))}
@@ -338,6 +525,16 @@
 
       // ========== HERO COMPONENT ==========
       function Hero() {
+        const [parallaxOffset, setParallaxOffset] = useState(0);
+        
+        useEffect(() => {
+          const handleScroll = () => {
+            setParallaxOffset(window.scrollY * 0.3);
+          };
+          window.addEventListener('scroll', handleScroll);
+          return () => window.removeEventListener('scroll', handleScroll);
+        }, []);
+
         return (
           <section id="home" className="relative min-h-[600px] lg:h-[85vh] flex items-center bg-brascon-gray overflow-hidden">
             <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[120%] bg-white rounded-full opacity-60 blur-3xl z-0"></div>
@@ -346,7 +543,7 @@
             <div className="max-w-[1400px] mx-auto px-6 w-full relative z-10">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                 
-                <div className="space-y-8 animate-fade-in-up">
+                <div className="space-y-8 stagger-children visible">
                   <div className="inline-flex items-center gap-2 text-brascon-navy font-bold tracking-wide text-xs uppercase">
                     <span className="w-8 h-[2px] bg-brascon-cyan"></span>
                     Residencial • Comercial • Industrial
@@ -362,11 +559,11 @@
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                    <a href={COMPANY_INFO.whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center px-8 py-4 bg-green-500 text-white text-sm font-bold rounded-full hover:bg-green-600 transition-all shadow-hover transform hover:-translate-y-1">
+                    <a href={COMPANY_INFO.whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center px-8 py-4 bg-green-500 text-white text-sm font-bold rounded-full hover:bg-green-600 transition-all shadow-hover transform hover:-translate-y-1 hover:shadow-glow">
                       <MessageCircle className="mr-2 h-5 w-5" />
                       Orçamento via WhatsApp
                     </a>
-                    <a href="#services" className="inline-flex items-center justify-center px-8 py-4 bg-white text-brascon-navy border border-gray-200 text-sm font-bold rounded-full hover:border-brascon-cyan hover:text-brascon-cyan transition-all shadow-sm">
+                    <a href="#services" className="inline-flex items-center justify-center px-8 py-4 bg-white text-brascon-navy border border-gray-200 text-sm font-bold rounded-full hover:border-brascon-cyan hover:text-brascon-cyan transition-all shadow-sm hover:shadow-md">
                       Ver Soluções
                     </a>
                   </div>
@@ -391,10 +588,11 @@
                   <img 
                     src="https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
                     alt="Sistema de Climatização VRF" 
-                    className="relative z-10 w-full rounded-2xl shadow-2xl object-cover h-[400px] lg:h-[500px] grayscale-[20%] hover:grayscale-0 transition-all duration-700"
+                    className="parallax-bg relative z-10 w-full rounded-2xl shadow-2xl object-cover h-[400px] lg:h-[500px] grayscale-[20%] hover:grayscale-0 transition-all duration-700"
+                    style={{ transform: `translateY(${parallaxOffset * 0.1}px)` }}
                   />
                   
-                  <div className="absolute top-10 right-0 lg:-right-8 bg-white p-5 rounded-2xl shadow-soft z-20 border-l-4 border-brascon-cyan animate-bounce-slow hidden md:block">
+                  <div className="absolute top-10 right-0 lg:-right-8 bg-white p-5 rounded-2xl shadow-soft z-20 border-l-4 border-brascon-cyan animate-float hidden md:block">
                     <div className="text-xs font-bold text-gray-400 uppercase mb-1">Qualidade</div>
                     <div className="text-2xl font-bold text-brascon-navy">Credenciada</div>
                     <div className="text-xs text-gray-500 mt-1">Multissetores</div>
@@ -403,30 +601,43 @@
 
               </div>
             </div>
+            
+            {/* Gradient transition to next section */}
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent"></div>
           </section>
         );
       }
 
       // ========== BRANDS COMPONENT ==========
       function Brands() {
+        const fadeRef = useFadeIn();
+        
         return (
-          <section id="brands" className="py-12 bg-white border-b border-gray-100">
-            <div className="max-w-[1400px] mx-auto px-6">
-              <p className="text-center text-sm font-bold text-gray-400 uppercase tracking-widest mb-8">
+          <section id="brands" className="py-16 bg-white">
+            <div ref={fadeRef} className="fade-section max-w-[1400px] mx-auto px-6">
+              <p className="text-center text-sm font-bold text-gray-400 uppercase tracking-widest mb-12">
                 Assistência Técnica Autorizada Oficial
               </p>
               
-              <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-80 hover:opacity-100 transition-opacity">
-                {brands.map((brand) => (
-                  <div key={brand.name} className="group flex flex-col items-center justify-center">
-                    <span className="text-2xl md:text-3xl font-extrabold text-gray-300 group-hover:text-brascon-navy transition-colors duration-300 cursor-default select-none" style={{ fontFamily: 'sans-serif' }}>
-                      {brand.name}
-                    </span>
-                    <div className="h-1 w-0 bg-brascon-cyan mt-1 transition-all duration-300 group-hover:w-full"></div>
+              <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10">
+                {BRAND_SEALS.map((brand) => (
+                  <div 
+                    key={brand.name} 
+                    className="seal-wrapper seal-container"
+                    onContextMenu={(e) => e.preventDefault()}
+                  >
+                    <div 
+                      className="seal-protected w-28 h-28 md:w-36 md:h-36 bg-center bg-contain bg-no-repeat"
+                      style={{ backgroundImage: `url(${brand.image})` }}
+                      title={`Autorizada Oficial ${brand.name}`}
+                    />
                   </div>
                 ))}
               </div>
             </div>
+            
+            {/* Gradient transition */}
+            <div className="h-16 bg-gradient-to-b from-white to-brascon-gray"></div>
           </section>
         );
       }
@@ -434,6 +645,7 @@
       // ========== SERVICES COMPONENT ==========
       function Services() {
         const [selectedService, setSelectedService] = useState(null);
+        const fadeRef = useFadeIn();
 
         useEffect(() => {
           if (selectedService) {
@@ -457,7 +669,7 @@
         return (
           <>
             <section id="services" className="py-24 bg-white">
-              <div className="max-w-[1400px] mx-auto px-6">
+              <div ref={fadeRef} className="fade-section max-w-[1400px] mx-auto px-6">
                 
                 <div className="flex flex-col md:flex-row justify-between items-end mb-16 border-b border-gray-100 pb-8">
                   <div className="max-w-3xl">
@@ -472,7 +684,11 @@
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   {SERVICES.map((service, index) => (
-                    <div key={service.id} className="group relative bg-brascon-gray rounded-3xl overflow-hidden hover:bg-white hover:shadow-hover transition-all duration-500 border border-transparent hover:border-gray-100 flex flex-col">
+                    <div 
+                      key={service.id} 
+                      className="group relative bg-brascon-gray rounded-3xl overflow-hidden hover:bg-white hover:shadow-hover transition-all duration-500 border border-transparent hover:border-gray-100 flex flex-col"
+                      style={{ transitionDelay: `${index * 0.1}s` }}
+                    >
                       <div className="p-8 h-full flex flex-col relative z-10">
                         <div className="mb-8 flex justify-between items-start">
                           <div className="w-14 h-14 rounded-2xl bg-white text-brascon-cyan flex items-center justify-center shadow-sm group-hover:bg-brascon-cyan group-hover:text-white transition-colors duration-300">
@@ -571,9 +787,12 @@
 
       // ========== FEATURES COMPONENT ==========
       function Features() {
+        const fadeRef = useFadeIn();
+        const [yearsCount, yearsRef] = useCountUp(COMPANY_INFO.yearsInMarket, 1500);
+
         return (
           <section id="about" className="py-20 bg-brascon-gray">
-            <div className="max-w-[1400px] mx-auto px-6">
+            <div ref={fadeRef} className="fade-section max-w-[1400px] mx-auto px-6">
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 
                 <div className="bg-brascon-navy text-white rounded-2xl p-8 flex flex-col justify-center shadow-lg">
@@ -586,12 +805,14 @@
                 </div>
 
                 {FEATURES.slice(0, 3).map((feature, idx) => (
-                  <div key={idx} className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center group">
+                  <div key={idx} className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 flex flex-col items-center text-center group hover:-translate-y-1">
                     <div className="w-16 h-16 rounded-full bg-brascon-gray flex items-center justify-center text-brascon-navy mb-6 group-hover:bg-brascon-cyan group-hover:text-white transition-colors duration-300">
                       <feature.icon className="h-7 w-7" />
                     </div>
                     <h3 className="text-lg font-bold text-gray-800 mb-3">
-                      {feature.title}
+                      {feature.hasCounter ? (
+                        <span ref={yearsRef}>+{yearsCount} Anos de Mercado</span>
+                      ) : feature.title}
                     </h3>
                     <p className="text-gray-500 text-sm leading-relaxed">
                       {feature.description}
@@ -600,43 +821,16 @@
                 ))}
               </div>
             </div>
-          </section>
-        );
-      }
-
-      // ========== SEO STRATEGY COMPONENT ==========
-      function SEOStrategyDisplay() {
-        return (
-          <section id="seo-strategy" className="py-16 bg-white border-y border-slate-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="mb-10 text-center">
-                <span className="inline-block p-2 rounded-full bg-slate-100 text-slate-500 mb-4">
-                  <Search className="h-6 w-6" />
-                </span>
-                <h2 className="text-2xl font-bold text-slate-900">Estratégia de Posicionamento Digital</h2>
-                <p className="mt-2 text-slate-500">Mapeamento de palavras-chave para domínio local (Santana/Água Fria) e Serviços (SP).</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {SEO_KEYWORDS.map((item, idx) => (
-                  <div key={idx} className="flex flex-col bg-slate-50 p-4 rounded-lg border border-slate-100">
-                    <span className="text-sm text-brascon-light font-bold uppercase tracking-wider mb-1">{item.intent}</span>
-                    <h4 className="text-lg font-semibold text-slate-800">"{item.keyword}"</h4>
-                    <span className="text-xs text-slate-400 mt-2">Volume de Busca: {item.volume}</span>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-800 text-center">
-                <strong>Nota do Desenvolvedor:</strong> Esta seção é um entregável da tarefa de planejamento. Em produção, essas palavras-chave seriam distribuídas em meta tags, títulos H1/H2 e no corpo do texto (como feito nas seções acima).
-              </div>
-            </div>
+            
+            {/* Gradient transition */}
+            <div className="h-16 mt-20 bg-gradient-to-b from-brascon-gray to-white"></div>
           </section>
         );
       }
 
       // ========== CONTACT COMPONENT ==========
       function Contact() {
+        const fadeRef = useFadeIn();
         const [formData, setFormData] = useState({
           nome: '',
           telefone: '',
@@ -667,7 +861,7 @@
 
         return (
           <section id="contact" className="relative py-24 bg-brascon-primary">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div ref={fadeRef} className="fade-section max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               
               <div className="text-center mb-16 text-white">
                 <h2 className="text-3xl md:text-4xl font-bold mb-4">Fale com um Especialista Autorizado</h2>
@@ -684,7 +878,7 @@
                     <div className="space-y-6">
                       {/* WhatsApp */}
                       <div className="flex items-start group">
-                        <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center text-green-600 mr-5">
+                        <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center text-green-600 mr-5 group-hover:scale-110 transition-transform">
                           <MessageCircle className="h-6 w-6" />
                         </div>
                         <div>
@@ -746,22 +940,22 @@
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Nome Completo</label>
-                        <input type="text" name="nome" required value={formData.nome} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-1 focus:ring-brascon-primary outline-none transition-all" placeholder="Seu nome" />
+                        <input type="text" name="nome" required value={formData.nome} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-2 focus:ring-brascon-primary/20 outline-none transition-all" placeholder="Seu nome" />
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Telefone</label>
-                        <input type="tel" name="telefone" required value={formData.telefone} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-1 focus:ring-brascon-primary outline-none transition-all" placeholder="(11) 99999-9999" />
+                        <input type="tel" name="telefone" required value={formData.telefone} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-2 focus:ring-brascon-primary/20 outline-none transition-all" placeholder="(11) 99999-9999" />
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">E-mail</label>
-                      <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-1 focus:ring-brascon-primary outline-none transition-all" placeholder="nome@empresa.com.br" />
+                      <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-2 focus:ring-brascon-primary/20 outline-none transition-all" placeholder="nome@empresa.com.br" />
                     </div>
 
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de Serviço</label>
-                      <select name="tipoServico" value={formData.tipoServico} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-1 focus:ring-brascon-primary outline-none transition-all text-gray-600">
+                      <select name="tipoServico" value={formData.tipoServico} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-2 focus:ring-brascon-primary/20 outline-none transition-all text-gray-600">
                         <option>Manutenção Preventiva (PMOC)</option>
                         <option>Instalação (VRF/Chiller)</option>
                         <option>Projeto de Engenharia</option>
@@ -771,11 +965,11 @@
 
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Detalhes da Solicitação</label>
-                      <textarea name="mensagem" rows={4} value={formData.mensagem} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-1 focus:ring-brascon-primary outline-none transition-all" placeholder="Descreva sua necessidade..."></textarea>
+                      <textarea name="mensagem" rows={4} value={formData.mensagem} onChange={handleChange} className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-brascon-primary focus:ring-2 focus:ring-brascon-primary/20 outline-none transition-all resize-none" placeholder="Descreva sua necessidade..."></textarea>
                     </div>
 
                     <div className="flex flex-col gap-3">
-                      <button type="submit" className="w-full py-4 px-6 rounded-lg bg-brascon-primary text-white font-bold text-lg hover:bg-blue-800 transition-all shadow-lg flex items-center justify-center gap-2">
+                      <button type="submit" className="w-full py-4 px-6 rounded-lg bg-brascon-primary text-white font-bold text-lg hover:bg-blue-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2">
                         Enviar Solicitação <Send className="w-5 h-5" />
                       </button>
                       <a href={COMPANY_INFO.whatsappLink} target="_blank" rel="noopener noreferrer" className="w-full py-4 px-6 rounded-lg border-2 border-green-500 text-green-600 font-bold text-lg hover:bg-green-50 transition-all flex items-center justify-center gap-2">
@@ -793,13 +987,14 @@
 
       // ========== LOCATION MAP COMPONENT ==========
       function LocationMap() {
+        const fadeRef = useFadeIn();
         const mapUrl = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3658.9886737330756!2d-46.62635992375685!3d-23.49692497884489!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x94cef7079c0966f1%3A0x6003737233825838!2sAv.%20%C3%81gua%20Fria%2C%20602%20-%20Santana%2C%20S%C3%A3o%20Paulo%20-%20SP%2C%2002332-000!5e0!3m2!1spt-BR!2sbr!4v1709123456789!5m2!1spt-BR!2sbr";
 
         return (
-          <section className="relative w-full h-[500px] bg-gray-100">
-            <iframe src={mapUrl} width="100%" height="100%" style={{ border: 0, filter: 'grayscale(0%)' }} allowFullScreen={true} loading="lazy" referrerPolicy="no-referrer-when-downgrade" className="absolute inset-0 z-0" title="Localização Brascon"></iframe>
+          <section ref={fadeRef} className="fade-section relative w-full h-[500px] bg-gray-100">
+            <iframe src={mapUrl} width="100%" height="100%" style={{ border: 0 }} allowFullScreen={true} loading="lazy" referrerPolicy="no-referrer-when-downgrade" className="absolute inset-0 z-0" title="Localização Brascon"></iframe>
 
-            <div className="absolute top-4 left-4 md:top-8 md:left-8 z-10 w-[90%] md:w-[400px] bg-white rounded-lg shadow-xl overflow-hidden font-sans">
+            <div className="absolute top-4 left-4 md:top-8 md:left-8 z-10 w-[90%] md:w-[400px] bg-white rounded-2xl shadow-2xl overflow-hidden font-sans">
               
               <div className="h-32 bg-gray-200 relative">
                 <img src="https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="Fachada Brascon" className="w-full h-full object-cover" />
@@ -862,11 +1057,11 @@
                 </div>
 
                 <div className="mt-6 flex gap-3">
-                  <a href="https://www.google.com/maps/dir//Av.+%C3%81gua+Fria,+602+-+Santana,+S%C3%A3o+Paulo+-+SP,+02332-000/@-23.496925,-46.62636,17z" target="_blank" rel="noopener noreferrer" className="flex-1 bg-blue-600 text-white rounded-full py-2 px-4 text-sm font-medium flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors shadow-sm">
+                  <a href="https://www.google.com/maps/dir//Av.+%C3%81gua+Fria,+602+-+Santana,+S%C3%A3o+Paulo+-+SP,+02332-000/@-23.496925,-46.62636,17z" target="_blank" rel="noopener noreferrer" className="flex-1 bg-blue-600 text-white rounded-full py-2.5 px-4 text-sm font-medium flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-sm hover:shadow-md">
                     <Navigation className="w-4 h-4" />
                     Rotas
                   </a>
-                  <button className="flex-1 bg-white border border-gray-300 text-blue-600 rounded-full py-2 px-4 text-sm font-medium flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors">
+                  <button className="flex-1 bg-white border border-gray-300 text-blue-600 rounded-full py-2.5 px-4 text-sm font-medium flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors">
                     <Smartphone className="w-4 h-4" />
                     Enviar para celular
                   </button>
@@ -971,11 +1166,11 @@
               <Brands />
               <Services />
               <Features />
-              <SEOStrategyDisplay />
               <Contact />
               <LocationMap />
             </main>
             <Footer />
+            <BackToTop />
           </div>
         );
       }
